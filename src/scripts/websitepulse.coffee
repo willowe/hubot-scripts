@@ -1,5 +1,5 @@
 # Description:
-#   WebsitePulse Scanner
+#   Notifies you via Hubot when WebsitePulse thinks you have a problem.
 #
 # Dependencies:
 #   scoped-http-client
@@ -13,8 +13,12 @@
 # Commands:
 #   wsp (pattern) -- show WSP problematic WSP targets matching pattern
 #
+# Notes:
+#    Copywrite 2013 iParadigms LLC.   
+#    Redistributable under the same license as used by the rest of hubot-scripts at https://github.com/github/hubot-scripts/blob/master/LICENSE.
+#
 # Author:
-#   will
+#   willowe
 
 HttpClient = require "scoped-http-client"
 
@@ -118,7 +122,6 @@ module.exports = (robot) ->
         msg.reply txt
 
     return
-
           
   if wsp_room
     action = () -> 
