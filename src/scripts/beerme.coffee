@@ -30,7 +30,12 @@ beers = [
   "http://dribbble.s3.amazonaws.com/users/79978/screenshots/594281/attachments/47191/more.png",
   "http://www.gqindia.com/sites/default/files/imagecache/article-inner-image-341-354/article/slideshow/1289/beer.JPG",
   "http://www.gqindia.com/sites/default/files/imagecache/article-inner-image-341-354/article/slideshow/1289/beer2.jpg",
-  "http://www.gqindia.com/sites/default/files/imagecache/article-inner-image-341-354/article/slideshow/1289/Beer3.jpg"
+  "http://www.gqindia.com/sites/default/files/imagecache/article-inner-image-341-354/article/slideshow/1289/Beer3.jpg",
+  "http://www.x-hellenica.gr/KioskImages/48/2_Mythos_lager_bottle_500ml.jpg",
+  "http://3.bp.blogspot.com/-KTzOW3S-I5U/TxMDcf-LWQI/AAAAAAAAALE/NZBLLBT66PI/s1600/beer+4.jpg",
+  "http://files.coloribus.com/files/adsarchive/part_353/3537855/file/malzbier-dark-beer-black-power-small-78000.jpg",
+  "http://www.merchantduvin.com/images/i-lindemans-lambic-family.jpg",
+  "http://craftbeeracademy.com/wp-content/uploads/2012/11/istock_stout_line.jpeg"
 ]
 
 module.exports = (robot) ->
