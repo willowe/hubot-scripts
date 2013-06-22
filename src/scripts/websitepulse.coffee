@@ -2,7 +2,7 @@
 #   Notifies you via Hubot when WebsitePulse thinks you have a problem.
 #
 # Dependencies:
-#   scoped-http-client
+#   None
 #
 # Configuration:
 #   HUBOT_WEBSITEPULSE_URL
@@ -19,8 +19,6 @@
 #
 # Author:
 #   willowe
-
-HttpClient = require "scoped-http-client"
 
 module.exports = (robot) ->
 
@@ -62,7 +60,7 @@ module.exports = (robot) ->
 
      robot.logger.debug "updating WSP cache"
 
-     HttpClient.create(the_url).get() (err,res, body) -> 
+     robot.http(the_url).get() (err,res, body) -> 
 
         if wsp_room and not one_time_only
           refresh_timer = setTimeout( update_wsp_cache, 900000, action )
