@@ -340,8 +340,14 @@ module.exports = (robot) ->
     callback = (incidents) ->
       if incidents.length > 0
         buffer = ""
+        processing_time = new Date().getTime()
         for incident of incidents
-          buffer = buffer + formatIncident(incident)
+          brain_key = "pd_last_seen_" + incident.incident_number
+          last_seen = robot.brain.get(brain_key)
+
+          if !last_seen or processing_time > last_seen + pagerDutyIncidentTimeout 
+             buffer = buffer + formatIncident(incident)
+             robot.brain.set(brain_key, processing_time)
         
         for r in pagerDutyRooms
           envelope = {}
