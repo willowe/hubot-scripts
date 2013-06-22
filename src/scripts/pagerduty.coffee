@@ -23,20 +23,28 @@
 #   HUBOT_PAGERDUTY_SUBDOMAIN
 #   HUBOT_PAGERDUTY_SERVICE_API_KEY - Service API Key from a 'General API Service'
 #   HUBOT_PAGERDUTY_SCHEDULE_ID
+#   HUBOT_PAGERDUTY_ROOMS - Rooms to post open incidents in (if empty,  ignored)
+#   HUBOT_PAGERDUTY_ALERT_INTERVAL - frequency (ms) to re-post open incidents
+#   HUBOT_PAGERDUTY_POLL_INTERVAL - how often (ms) to look for new PagerDuty incidents
 
 inspect = require('util').inspect
 
 moment = require('moment')
 
-pagerDutyUsers = {}
-pagerDutyApiKey        = process.env.HUBOT_PAGERDUTY_API_KEY
-pagerDutySubdomain     = process.env.HUBOT_PAGERDUTY_SUBDOMAIN
-pagerDutyBaseUrl       = "https://#{pagerDutySubdomain}.pagerduty.com/api/v1"
-pagerDutyServiceApiKey = process.env.HUBOT_PAGERDUTY_SERVICE_API_KEY
-pagerDutyScheduleId    = process.env.HUBOT_PAGERDUTY_SCHEDULE_ID
+pagerDutyUsers           = {}
+pagerDutyApiKey          = process.env.HUBOT_PAGERDUTY_API_KEY
+pagerDutySubdomain       = process.env.HUBOT_PAGERDUTY_SUBDOMAIN
+pagerDutyBaseUrl         = "https://#{pagerDutySubdomain}.pagerduty.com/api/v1"
+pagerDutyServiceApiKey   = process.env.HUBOT_PAGERDUTY_SERVICE_API_KEY
+pagerDutyScheduleId      = process.env.HUBOT_PAGERDUTY_SCHEDULE_ID
+pagerDutyIncidentTimeout = process.env.HUBOT_PAGERDUTY_ALERT_INTERVAL ||= 30000
+pagerDutyPollInterval    = process.env.HUBOT_PAGERDUTY_POLL_INTERVAL ||= 50000 # once every 30 seconds
+pagerDutyRooms           = null
+if process.env.HUBOT_PAGERDUTY_ROOMS
+   pagerDutyRooms = process.env.HUBOT_PAGERDUTY_ROOMS.split(/\s*,\s*/)
 
 module.exports = (robot) ->
-  robot.respond /pager( me)?$/i, (msg) ->
+  robot.respond /(pager|pd)( me)?$/i, (msg) ->
     if missingEnvironmentForApi(msg)
       return
 
@@ -51,20 +59,20 @@ module.exports = (robot) ->
     cmds = (cmd for cmd in cmds when cmd.match(/(pager me |who's on call)/))
     msg.send emailNote, cmds.join("\n")
 
-  robot.respond /pager(?: me)? as (.*)$/i, (msg) ->
+  robot.respond /(?:pd|pager)(?: me)? as (.*)$/i, (msg) ->
     email = msg.match[1]
     msg.message.user.pagerdutyEmail = email
-    msg.send "Okay, I'll remember your PagerDuty email is #{email}"
+    msg.reply "Okay, I'll remember your PagerDuty email is #{email}"
 
   # Assumes your Campfire usernames and PagerDuty names are identical
-  robot.respond /pager( me)? (\d+)/i, (msg) ->
+  robot.respond /(?:pager|pd)(?: me)? (\d+)/i, (msg) ->
     withPagerDutyUsers msg, (users) ->
 
       userId = pagerDutyUserId(msg, users)
       return unless userId
 
       start     = moment().format()
-      minutes   = parseInt msg.match[2]
+      minutes   = parseInt msg.match[1]
       end       = moment().add('minutes', minutes).format()
       override  = {
         'start':     start,
@@ -79,7 +87,7 @@ module.exports = (robot) ->
             end = moment(json.override.end)
             msg.send "Rejoice, #{old_username}! #{json.override.user.name} has the pager until #{end.format()}"
 
-  robot.respond /(pager|major)( me)? (inc|incidents|sup|problems)$/i, (msg) ->
+  robot.respond /(pager|major|pd)( me)? (inc|incidents|sup|problems)$/i, (msg) ->
     pagerDutyIncidents msg, (incidents) ->
       if incidents.length > 0
         buffer = "Triggered:\n----------\n"
@@ -92,20 +100,20 @@ module.exports = (robot) ->
             buffer = buffer + formatIncident(incident)
         msg.send buffer
       else
-        msg.send "No open incidents"
+        msg.send "No open PagerDuty incidents"
 
-  robot.respond /(pager|major)( me)? (?:trigger|page) (.+)$/i, (msg) ->
-    pagerDutyIntegrationAPI msg, "trigger", msg.match[3], (json) ->
+  robot.respond /(?:pager|major|pd)(?: me)? (?:trigger|page) (.+)$/i, (msg) ->
+    pagerDutyIntegrationAPI msg, "trigger", msg.match[1], (json) ->
       msg.reply "#{json.status}, key: #{json.incident_key}"
 
-  robot.respond /(pager|major)( me)? ack(nowledge)? (.+)$/i, (msg) ->
-    updateIncident(msg, msg.match[4], 'acknowledged')
+  robot.respond /(?:pager|major|pd)(?: me)? ack(nowledge)? (.+)$/i, (msg) ->
+    updateIncident(msg, msg.match[1], 'acknowledged')
 
-  robot.respond /(pager|major)( me)? res(olve)?(d)? (.+)$/i, (msg) ->
-    updateIncident(msg, msg.match[5], 'resolved')
+  robot.respond /(?:pager|major|pd)(?: me)? res(olve)?(d)? (.+)$/i, (msg) ->
+    updateIncident(msg, msg.match[1], 'resolved')
 
-  robot.respond /(pager|major)( me)? notes (.+)$/i, (msg) ->
-    incidentId = msg.match[3]
+  robot.respond /(?:pager|major|pd)(?: me)? notes (.+)$/i, (msg) ->
+    incidentId = msg.match[1]
     pagerDutyGet msg, "/incidents/#{incidentId}/notes", {}, (json) ->
       buffer = ""
       for note in json.notes
@@ -113,9 +121,9 @@ module.exports = (robot) ->
       msg.send buffer
 
 
-  robot.respond /(pager|major)( me)? note ([\d\w]+) (.+)$/i, (msg) ->
-    incidentId = msg.match[3]
-    content = msg.match[4]
+  robot.respond /(?:pager|major|pd)(?: me)? note ([\d\w]+) (.+)$/i, (msg) ->
+    incidentId = msg.match[1]
+    content = msg.match[2]
 
     withPagerDutyUsers msg, (users) ->
 
@@ -135,11 +143,13 @@ module.exports = (robot) ->
 
 
   # who is on call?
-  robot.respond /who('s|s| is)? (on call|oncall)/i, (msg) ->
+  robot.respond /(pd )?(who)?(\'s|s| is)?( on call| oncall)/i, (msg) ->
     withCurrentOncall msg, (username) ->
       msg.reply "#{username} is on call"
 
   missingEnvironmentForApi = (msg) ->
+    unless msg?
+      return
     missingAnything = false
     unless pagerDutySubdomain?
       msg.send "PagerDuty Subdomain is missing:  Ensure that HUBOT_PAGERDUTY_SUBDOMAIN is set."
@@ -151,7 +161,6 @@ module.exports = (robot) ->
       msg.send "PagerDuty Schedule ID is missing:  Ensure that HUBOT_PAGERDUTY_SCHEDULE_ID is set."
       missingAnything |= true
     missingAnything
-
 
   pagerDutyUserId = (msg, users) ->
     email  = msg.message.user.pagerdutyEmail || msg.message.user.email_address
@@ -172,7 +181,7 @@ module.exports = (robot) ->
       return
 
     auth = "Token token=#{pagerDutyApiKey}"
-    msg.http(pagerDutyBaseUrl + url)
+    robot.http(pagerDutyBaseUrl + url)
       .query(query)
       .headers(Authorization: auth, Accept: 'application/json')
       .get() (err, res, body) ->
@@ -314,7 +323,6 @@ module.exports = (robot) ->
         if foundIncidents.length == 0
           msg.reply "Couldn't find incident #{incident_number}"
 
-
   pagerDutyIntergrationPost = (msg, json, cb) ->
     msg.http('https://events.pagerduty.com/generic/2010-04-15/create_event.json')
       .header("content-type","application/json")
@@ -327,3 +335,26 @@ module.exports = (robot) ->
           else
             console.log res.statusCode
             console.log body
+
+  pagerDutyPoller = () ->
+    callback = (incidents) ->
+      if incidents.length > 0
+        buffer = ""
+        for incident of incidents
+          buffer = buffer + formatIncident(incident)
+        
+        for r in pagerDutyRooms
+          envelope = {}
+          envelope.room = r
+          robot.logger.debug( "posting PagerDuty to #{r}"  )
+          robot.send( envelope, buffer )
+    query =
+      status:  "triggered"
+      sort_by: "incident_number:asc"
+    robot.logger.debug( "polling for new pagerduty incidents" )
+    pagerDutyGet null, "/incidents", query, (json) ->
+      callback(json.incidents)
+
+  if pagerDutyRooms
+    robot.logger.debug( "polling PagerDuty every #{pagerDutyPollInterval} ms" )
+    setInterval( pagerDutyPoller, pagerDutyPollInterval )
