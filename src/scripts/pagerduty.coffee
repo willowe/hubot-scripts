@@ -56,13 +56,13 @@ module.exports = (robot) ->
                   "I don't know your PagerDuty email. Change it with `#{robot.name} pager me as you@yourdomain.com`"
 
     cmds = robot.helpCommands()
-    cmds = (cmd for cmd in cmds when cmd.match(/(pager me |who's on call)/))
+    cmds = (cmd for cmd in cmds when cmd.match(/(pager me |who\'s on call)/))
     msg.send emailNote, cmds.join("\n")
 
   robot.respond /(?:pd|pager)(?: me)? as (.*)$/i, (msg) ->
     email = msg.match[1]
     msg.message.user.pagerdutyEmail = email
-    msg.reply "Okay, I'll remember your PagerDuty email is #{email}"
+    msg.reply "Okay, I\'ll remember your PagerDuty email is #{email}"
 
   # Assumes your Campfire usernames and PagerDuty names are identical
   robot.respond /(?:pager|pd)(?: me)? (\d+)/i, (msg) ->
@@ -143,9 +143,27 @@ module.exports = (robot) ->
 
 
   # who is on call?
-  robot.respond /(pd )?(who)?(\'s|s| is)?( on call| oncall)/i, (msg) ->
-    withCurrentOncall msg, (username) ->
-      msg.reply "#{username} is on call"
+  robot.respond /(pd )?(who(\'s|s| is)?)?( on call| oncall)/i, (msg) ->
+    now = moment().format()
+    soon = moment().add("1 hour").format()
+    msg.reply "Fetching oncall schedule from #{now} to #{soon} ..."
+    query = {
+        since: now,
+        until: soon,
+        overflow: "true"
+        }
+    pagerDutyGet msg, "/schedules/", query, (json) ->
+      if json.schedules and json.schedules.length > 0
+        for schedule in json.schedules
+           # this do() keeps "schedule" from being closure-bound too early
+           do( schedule ) ->
+             beginning = "#{schedule.name} (#{schedule.id}): "
+             robot.logger.debug( "Checking #{beginning}")
+             callback = (json) ->
+               msg.reply "#{beginning} #{json.entries[0].user.name}"
+             pagerDutyGet msg, "/schedules/#{schedule.id}/entries", query, callback
+      else
+        robot.logger.info( "PagerDuty returned zero schedules" )
 
   missingEnvironmentForApi = (msg) ->
     unless msg?
