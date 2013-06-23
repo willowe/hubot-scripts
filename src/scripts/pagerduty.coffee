@@ -87,7 +87,7 @@ module.exports = (robot) ->
             end = moment(json.override.end)
             msg.send "Rejoice, #{old_username}! #{json.override.user.name} has the pager until #{end.format()}"
 
-  robot.respond /(pager|major|pd)( me)? (inc|incidents|sup|problems)$/i, (msg) ->
+  robot.respond /(pager|major|pd)( me)? (inc|incidents|sup|problems|status)$/i, (msg) ->
     pagerDutyIncidents msg, (incidents) ->
       if incidents.length > 0
         buffer = "Triggered:\n----------\n"
@@ -98,9 +98,9 @@ module.exports = (robot) ->
         for junk, incident of incidents.reverse()
           if incident.status == 'acknowledged'
             buffer = buffer + formatIncident(incident)
-        msg.send buffer
+        msg.reply buffer
       else
-        msg.send "No open PagerDuty incidents"
+        msg.reply "No open PagerDuty incidents"
 
   robot.respond /(?:pager|major|pd)(?: me)? (?:trigger|page) (.+)$/i, (msg) ->
     pagerDutyIntegrationAPI msg, "trigger", msg.match[1], (json) ->
@@ -118,7 +118,7 @@ module.exports = (robot) ->
       buffer = ""
       for note in json.notes
         buffer += "#{note.created_at} #{note.user.name}: #{note.content}\n"
-      msg.send buffer
+      msg.reply buffer
 
 
   robot.respond /(?:pager|major|pd)(?: me)? note ([\d\w]+) (.+)$/i, (msg) ->
@@ -137,9 +137,9 @@ module.exports = (robot) ->
 
       pagerDutyPost msg, "/incidents/#{incidentId}/notes", data, (json) ->
         if json && json.note
-          msg.send "Got it! Note created: #{json.note.content}"
+          msg.reply "Got it! Note created: #{json.note.content}"
         else
-          msg.send "Sorry, I couldn't do it :("
+          msg.reply "Sorry, I couldn't do it :("
 
 
   # who is on call?
@@ -170,26 +170,26 @@ module.exports = (robot) ->
       return
     missingAnything = false
     unless pagerDutySubdomain?
-      msg.send "PagerDuty Subdomain is missing:  Ensure that HUBOT_PAGERDUTY_SUBDOMAIN is set."
+      msg.reply "PagerDuty Subdomain is missing:  Ensure that HUBOT_PAGERDUTY_SUBDOMAIN is set."
       missingAnything |= true
     unless pagerDutyApiKey?
-      msg.send "PagerDuty API Key is missing:  Ensure that HUBOT_PAGERDUTY_API_KEY is set."
+      msg.reply "PagerDuty API Key is missing:  Ensure that HUBOT_PAGERDUTY_API_KEY is set."
       missingAnything |= true
     unless pagerDutyScheduleId?
-      msg.send "PagerDuty Schedule ID is missing:  Ensure that HUBOT_PAGERDUTY_SCHEDULE_ID is set."
+      msg.reply "PagerDuty Schedule ID is missing:  Ensure that HUBOT_PAGERDUTY_SCHEDULE_ID is set."
       missingAnything |= true
     missingAnything
 
   pagerDutyUserId = (msg, users) ->
     email  = msg.message.user.pagerdutyEmail || msg.message.user.email_address
     unless email
-      msg.send "Sorry, I can't figure out your email address :( Can you tell me with `#{robot.name} pager me as you@yourdomain.com`?"
+      msg.reply "Sorry, I can't figure out your email address :( Can you tell me with `#{robot.name} pager me as you@yourdomain.com`?"
       return
 
     user = users[email]
 
     unless user
-      msg.send "Sorry, I couldn't find a PagerDuty user for #{email}. Double check you have a user, and that I know your PagerDuty email with `#{robot.name} pager me as you@yourdomain.com`"
+      msg.reply "Sorry, I couldn't find a PagerDuty user for #{email}. Double check you have a user, and that I know your PagerDuty email with `#{robot.name} pager me as you@yourdomain.com`"
       return
 
     users[email].id
