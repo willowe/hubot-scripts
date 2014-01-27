@@ -89,8 +89,9 @@ module.exports = (robot) ->
 
   robot.respond /(pager|major|pd)( me)? (inc|incidents|sup|problems|status)$/i, (msg) ->
     pagerDutyIncidents msg, (incidents) ->
+      buffer = "\n\n"
       if incidents.length > 0
-        buffer = "Triggered:\n----------\n"
+        buffer = buffer + "Triggered:\n----------\n"
         for junk, incident of incidents.reverse()
           if incident.status == 'triggered'
             buffer = buffer + formatIncident(incident)
@@ -154,7 +155,15 @@ module.exports = (robot) ->
         }
     pagerDutyGet msg, "/schedules/", query, (json) ->
       if json.schedules and json.schedules.length > 0
-        for schedule in json.schedules
+        robot.logger.debug JSON.stringify( json )
+        sorter = ( a, b ) ->
+                if a.name > b.name
+                  return 1
+                else if b.name > a.name
+                  return -1
+                else
+                  return 0
+        for schedule in json.schedules.sort( sorter )
            # this do() keeps "schedule" from being closure-bound too early
            do( schedule ) ->
              beginning = "#{schedule.name} (#{schedule.id}): "
@@ -305,13 +314,17 @@ module.exports = (robot) ->
      #   HOSTSTATE: 'UP' },
     if inc.incident_number && inc.trigger_summary_data
       if inc.trigger_summary_data.description
-        "#{inc.incident_number}: #{inc.created_on} #{inc.trigger_summary_data.description} - assigned to #{inc.assigned_to_user.name}\n"
+        "#{inc.incident_number} (#{inc.status}): #{inc.created_on} #{inc.trigger_summary_data.description} - assigned to #{inc.assigned_to_user.name}\n" 
+      else if inc.trigger_summary_data.subject
+        "#{inc.incident_number} (#{inc.status}): #{inc.created_on} #{inc.trigger_summary_data.subject} - assigned to #{inc.assigned_to_user.name}\n"
       else if inc.trigger_summary_data.pd_nagios_object == 'service'
-         "#{inc.incident_number}: #{inc.created_on} #{inc.trigger_summary_data.HOSTNAME}/#{inc.trigger_summary_data.SERVICEDESC} - assigned to #{inc.assigned_to_user.name}\n"
+         "#{inc.incident_number} (#{inc.status}): #{inc.created_on} #{inc.trigger_summary_data.HOSTNAME}/#{inc.trigger_summary_data.SERVICEDESC} - assigned to #{inc.assigned_to_user.name}\n"
       else if inc.trigger_summary_data.pd_nagios_object == 'host'
-         "#{inc.incident_number}: #{inc.created_on} #{inc.trigger_summary_data.HOSTNAME}/#{inc.trigger_summary_data.HOSTSTATE} - assigned to #{inc.assigned_to_user.name}\n"
+         "#{inc.incident_number} (#{inc.status}): #{inc.created_on} #{inc.trigger_summary_data.HOSTNAME}/#{inc.trigger_summary_data.HOSTSTATE} - assigned to #{inc.assigned_to_user.name}\n"
+      else
+        "(ERROR: missing fields while formatting incident #{inc.incident_number})"
     else
-      ""
+      "(ERROR: can't format an incidet without an incident number)"
 
   updateIncident = (msg, incident_number, status) ->
     withPagerDutyUsers msg, (users) ->
@@ -356,26 +369,29 @@ module.exports = (robot) ->
 
   pagerDutyPoller = () ->
     callback = (incidents) ->
+      robot.logger.debug( "Found #{incidents.length} PagerDuty incidents" )
       if incidents.length > 0
-        buffer = ""
         processing_time = new Date().getTime()
-        for incident of incidents
-          brain_key = "pd_last_seen_" + incident.incident_number
+
+        for incident in incidents
+          brain_key = "pd_last_seen_" + incident.incident_number + "_" + incident.status
           last_seen = robot.brain.get(brain_key)
+          robot.logger.debug( "Last saw incident #{incident.incident_number} at #{last_seen} with status #{incident.status} (key #{brain_key})"  )
+          robot.logger.debug( JSON.stringify( incident ) )
 
           if !last_seen or processing_time > last_seen + pagerDutyIncidentTimeout 
-             buffer = buffer + formatIncident(incident)
-             robot.brain.set(brain_key, processing_time)
-        
-        for r in pagerDutyRooms
-          envelope = {}
-          envelope.room = r
-          robot.logger.debug( "posting PagerDuty to #{r}"  )
-          robot.send( envelope, buffer )
+             buffer = formatIncident(incident)
+             for r in pagerDutyRooms
+                envelope = {}
+                envelope.room = r
+                robot.logger.debug( "PagerDuty posting to #{r}: #{buffer}"  )
+                robot.send( envelope, buffer )
+                robot.brain.set(brain_key, processing_time)
+                
     query =
-      status:  "triggered"
+      status:  "triggered,acknowledged"
       sort_by: "incident_number:asc"
-    robot.logger.debug( "polling for new pagerduty incidents" )
+    robot.logger.debug( "polling for pagerduty incidents" )
     pagerDutyGet null, "/incidents", query, (json) ->
       callback(json.incidents)
 
