@@ -15,4 +15,4 @@
 
 module.exports = (robot) ->
   robot.hear /whee/i, (msg) ->
-    msg.send "http://www.youtube.com/watch?v=Q9G4qaOD2Bo"
+    msg.send "http://www.youtube.com/watch?v=QggkSbH_LNE"
